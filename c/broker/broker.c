@@ -6,7 +6,7 @@
  * ATUALIZAÇÃO: Agora valida MessagePack para conformidade com Parte 3
  * Mantém comportamento de roteamento transparente, mas verifica formato
  */
-
+#define _POSIX_C_SOURCE 200809L
 #include <zmq.h>
 #include <msgpack.h>
 #include <stdio.h>
