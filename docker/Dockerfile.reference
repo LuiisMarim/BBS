@@ -1,0 +1,30 @@
+# Dockerfile para o Servidor de Referência (Python)
+FROM python:3.11-slim
+
+# Instala dependências do sistema
+RUN apt-get update && apt-get install -y \
+    libzmq3-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Cria diretório de trabalho
+WORKDIR /app
+
+# Copia código comum
+COPY python/common_utils/ ./common_utils/
+
+# Copia código do servidor de referência
+COPY python/reference_server/ ./reference_server/
+
+# Instala dependências Python
+WORKDIR /app/reference_server
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Cria diretório de dados
+RUN mkdir -p /data
+
+# Expõe porta
+EXPOSE 5559
+
+# Comando para executar
+CMD ["python", "reference_server.py"]

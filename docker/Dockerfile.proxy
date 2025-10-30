@@ -1,0 +1,28 @@
+# Dockerfile para o Proxy (JavaScript/Node.js)
+FROM node:18-alpine
+
+# Cria diretório de trabalho
+WORKDIR /app
+
+# Instala dependências do sistema para ZeroMQ
+RUN apk add --no-cache \
+    zeromq-dev \
+    python3 \
+    make \
+    g++
+
+# Copia código comum
+COPY javascript/common_utils/ ./common_utils/
+
+# Copia código do proxy
+COPY javascript/proxy/ ./proxy/
+
+# Instala dependências Node.js
+WORKDIR /app/proxy
+RUN npm install
+
+# Expõe portas
+EXPOSE 5557 5558
+
+# Comando para executar
+CMD ["node", "proxy.js"]

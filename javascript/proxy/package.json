@@ -1,0 +1,20 @@
+{
+  "name": "bbs-proxy",
+  "version": "1.0.0",
+  "description": "Proxy XSUB-XPUB para sistema de mensagens BBS",
+  "main": "proxy.js",
+  "scripts": {
+    "start": "node proxy.js"
+  },
+  "keywords": [
+    "zeromq",
+    "proxy",
+    "pubsub",
+    "distributed-systems"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "zeromq": "^5.2.8"
+  }
+}

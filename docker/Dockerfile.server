@@ -1,0 +1,30 @@
+# Dockerfile para o Servidor de Mensagens (Python)
+FROM python:3.11-slim
+
+# Instala dependências do sistema
+RUN apt-get update && apt-get install -y \
+    libzmq3-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Cria diretório de trabalho
+WORKDIR /app
+
+# Copia código comum
+COPY python/common_utils/ ./common_utils/
+
+# Copia código do servidor
+COPY python/server/ ./server/
+
+# Instala dependências Python
+WORKDIR /app/server
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Cria diretório de dados
+RUN mkdir -p /data/replication
+
+# Expõe portas (não necessário, mas para documentação)
+EXPOSE 5556 5557
+
+# Comando para executar
+CMD ["python", "server.py"]

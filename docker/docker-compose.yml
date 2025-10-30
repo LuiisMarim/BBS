@@ -1,0 +1,175 @@
+version: '3.8'
+
+services:
+  # Broker - Intermediário REQ-REP (C)
+  broker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.broker
+    container_name: bbs_broker
+    hostname: broker
+    networks:
+      - bbs_network
+    ports:
+      - "5555:5555"
+      - "5556:5556"
+    restart: unless-stopped
+
+  # Proxy - Roteador PUB-SUB (JavaScript)
+  proxy:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.proxy
+    container_name: bbs_proxy
+    hostname: proxy
+    networks:
+      - bbs_network
+    ports:
+      - "5557:5557"
+      - "5558:5558"
+    restart: unless-stopped
+    depends_on:
+      - broker
+
+  # Servidor de Referência (Python)
+  reference:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.reference
+    container_name: bbs_reference
+    hostname: reference
+    networks:
+      - bbs_network
+    ports:
+      - "5559:5559"
+    volumes:
+      - reference_data:/data
+    restart: unless-stopped
+    depends_on:
+      - broker
+      - proxy
+
+  # Servidores de Mensagens (Python) - 3 réplicas
+  server_1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.server
+    container_name: bbs_server_1
+    hostname: server_1
+    environment:
+      - SERVER_NAME=server_1
+    networks:
+      - bbs_network
+    volumes:
+      - server_1_data:/data
+    restart: unless-stopped
+    depends_on:
+      - broker
+      - proxy
+      - reference
+
+  server_2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.server
+    container_name: bbs_server_2
+    hostname: server_2
+    environment:
+      - SERVER_NAME=server_2
+    networks:
+      - bbs_network
+    volumes:
+      - server_2_data:/data
+    restart: unless-stopped
+    depends_on:
+      - broker
+      - proxy
+      - reference
+
+  server_3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.server
+    container_name: bbs_server_3
+    hostname: server_3
+    environment:
+      - SERVER_NAME=server_3
+    networks:
+      - bbs_network
+    volumes:
+      - server_3_data:/data
+    restart: unless-stopped
+    depends_on:
+      - broker
+      - proxy
+      - reference
+
+  # Cliente Interativo (JavaScript)
+  client:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.client
+    container_name: bbs_client
+    hostname: client
+    networks:
+      - bbs_network
+    stdin_open: true
+    tty: true
+    depends_on:
+      - broker
+      - proxy
+      - server_1
+      - server_2
+      - server_3
+
+  # Bots Automáticos (Python) - 2 réplicas
+  bot_1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.bot
+    container_name: bbs_bot_1
+    hostname: bot_1
+    environment:
+      - BOT_ID=1
+    networks:
+      - bbs_network
+    restart: unless-stopped
+    depends_on:
+      - broker
+      - proxy
+      - server_1
+      - server_2
+      - server_3
+
+  bot_2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.bot
+    container_name: bbs_bot_2
+    hostname: bot_2
+    environment:
+      - BOT_ID=2
+    networks:
+      - bbs_network
+    restart: unless-stopped
+    depends_on:
+      - broker
+      - proxy
+      - server_1
+      - server_2
+      - server_3
+
+networks:
+  bbs_network:
+    driver: bridge
+    name: bbs_network
+
+volumes:
+  reference_data:
+    name: bbs_reference_data
+  server_1_data:
+    name: bbs_server_1_data
+  server_2_data:
+    name: bbs_server_2_data
+  server_3_data:
+    name: bbs_server_3_data

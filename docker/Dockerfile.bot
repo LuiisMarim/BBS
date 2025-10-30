@@ -1,0 +1,24 @@
+# Dockerfile para o Bot (Python)
+FROM python:3.11-slim
+
+# Instala dependências do sistema
+RUN apt-get update && apt-get install -y \
+    libzmq3-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Cria diretório de trabalho
+WORKDIR /app
+
+# Copia código comum
+COPY python/common_utils/ ./common_utils/
+
+# Copia código do bot
+COPY python/bot/ ./bot/
+
+# Instala dependências Python
+WORKDIR /app/bot
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Comando para executar
+CMD ["python", "bot.py"]

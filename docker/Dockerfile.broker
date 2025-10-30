@@ -1,0 +1,27 @@
+# Dockerfile para o Broker (C)
+FROM gcc:12
+
+# Instala dependências (incluindo msgpack-c para validação)
+RUN apt-get update && apt-get install -y \
+    libzmq3-dev \
+    libmsgpack-dev \
+    libmsgpackc2 \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
+# Cria diretório de trabalho
+WORKDIR /app
+
+# Copia código fonte
+COPY c/common_utils/ ./common_utils/
+COPY c/broker/ ./broker/
+
+# Compila o broker
+WORKDIR /app/broker
+RUN make
+
+# Expõe portas
+EXPOSE 5555 5556
+
+# Comando para executar
+CMD ["./broker"]

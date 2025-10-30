@@ -1,0 +1,21 @@
+{
+  "name": "bbs-client",
+  "version": "1.0.0",
+  "description": "Cliente interativo para sistema de mensagens BBS",
+  "main": "client.js",
+  "scripts": {
+    "start": "node client.js"
+  },
+  "keywords": [
+    "zeromq",
+    "client",
+    "bbs",
+    "distributed-systems"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "zeromq": "^5.2.8",
+    "msgpack-lite": "^0.1.26"
+  }
+}
