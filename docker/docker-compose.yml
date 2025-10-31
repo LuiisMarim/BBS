@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Broker - Intermediário REQ-REP (C)
   broker:

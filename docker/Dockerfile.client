@@ -11,15 +11,25 @@ RUN apk add --no-cache \
 # Cria diretório de trabalho
 WORKDIR /app
 
-# Copia código comum
-COPY javascript/common_utils/ ./common_utils/
-
-# Copia código do cliente
-COPY javascript/client/ ./client/
+# Copia package.json do client primeiro
+COPY javascript/client/package.json ./client/
 
 # Instala dependências Node.js
 WORKDIR /app/client
 RUN npm install
+
+# Cria link simbólico para node_modules na raiz
+RUN ln -s /app/client/node_modules /app/node_modules
+
+# Volta para raiz e copia código comum
+WORKDIR /app
+COPY javascript/common_utils/ ./common_utils/
+
+# Copia código do client (sem sobrescrever package.json e node_modules)
+COPY javascript/client/*.js ./client/
+
+# Define workdir final
+WORKDIR /app/client
 
 # Comando para executar (modo interativo)
 CMD ["node", "client.js"]

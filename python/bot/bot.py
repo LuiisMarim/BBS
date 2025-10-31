@@ -55,7 +55,11 @@ class BBSBot:
         Args:
             bot_id: ID do bot (opcional, será gerado se não fornecido)
         """
-        self.bot_id = bot_id or random.randint(1000, 9999)
+        # Gera ID único incluindo timestamp para evitar conflitos
+        if bot_id:
+            self.bot_id = f"{bot_id}_{int(time.time())}"
+        else:
+            self.bot_id = f"{random.randint(1000, 9999)}_{int(time.time())}"
         self.username = f"bot_{self.bot_id}"
         self.clock = LogicalClock()
         
@@ -109,7 +113,8 @@ class BBSBot:
                     print(f"[BOT:{self.username}] Login realizado com sucesso")
                     return True
                 else:
-                    print(f"[BOT:{self.username}] Erro no login: {data.get('message', 'Desconhecido')}")
+                    
+                    print(f"[BOT:{self.username}] Erro no login: {data.get('description', 'Desconhecido')}")
             
             return False
             

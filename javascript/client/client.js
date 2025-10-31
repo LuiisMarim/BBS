@@ -22,14 +22,17 @@ class BBSClient {
     this.subscribedChannels = new Set();
     
     // Sockets ZeroMQ
-    this.reqSocket = zmq.socket('req');
-    this.subSocket = zmq.socket('sub');
+    this.reqSocket = new zmq.Request();
+    this.subSocket = new zmq.Subscriber();
     
     // Interface readline
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout
     });
+    
+    // Flag para controlar listener de mensagens
+    this.listeningMessages = false;
     
     console.log('[CLIENT] Cliente BBS inicializado');
   }
@@ -47,16 +50,35 @@ class BBSClient {
       this.subSocket.connect(PROXY_FRONTEND);
       console.log(`[CLIENT] Conectado ao proxy em ${PROXY_FRONTEND}`);
       
-      // Configura listener para mensagens recebidas
-      this.subSocket.on('message', (topic, message) => {
-        this.handleReceivedMessage(topic, message);
-      });
+      // Inicia listener para mensagens recebidas em background
+      this.startMessageListener();
       
       return true;
     } catch (error) {
       console.error('[CLIENT] Erro ao conectar:', error);
       return false;
     }
+  }
+
+  /**
+   * Inicia listener de mensagens em background
+   */
+  startMessageListener() {
+    if (this.listeningMessages) return;
+    
+    this.listeningMessages = true;
+    
+    (async () => {
+      try {
+        for await (const [topic, message] of this.subSocket) {
+          this.handleReceivedMessage(topic, message);
+        }
+      } catch (error) {
+        if (this.listeningMessages) {
+          console.error('[CLIENT] Erro no listener de mensagens:', error);
+        }
+      }
+    })();
   }
 
   /**
@@ -67,11 +89,10 @@ class BBSClient {
       const data = { user: username };
       const message = createMessage('login', data, this.clock);
       
-      this.reqSocket.send(message);
+      await this.reqSocket.send(message);
       
-      const response = await new Promise((resolve) => {
-        this.reqSocket.once('message', (msg) => resolve(parseMessage(msg)));
-      });
+      const [rawResponse] = await this.reqSocket.receive();
+      const response = parseMessage(rawResponse);
       
       if (response && response.data) {
         updateLogicalClock(this.clock, response.data.clock);
@@ -102,11 +123,10 @@ class BBSClient {
   async listUsers() {
     try {
       const message = createMessage('users', {}, this.clock);
-      this.reqSocket.send(message);
+      await this.reqSocket.send(message);
       
-      const response = await new Promise((resolve) => {
-        this.reqSocket.once('message', (msg) => resolve(parseMessage(msg)));
-      });
+      const [rawResponse] = await this.reqSocket.receive();
+      const response = parseMessage(rawResponse);
       
       if (response && response.data) {
         updateLogicalClock(this.clock, response.data.clock);
@@ -130,11 +150,10 @@ class BBSClient {
       const data = { channel: channelName };
       const message = createMessage('channel', data, this.clock);
       
-      this.reqSocket.send(message);
+      await this.reqSocket.send(message);
       
-      const response = await new Promise((resolve) => {
-        this.reqSocket.once('message', (msg) => resolve(parseMessage(msg)));
-      });
+      const [rawResponse] = await this.reqSocket.receive();
+      const response = parseMessage(rawResponse);
       
       if (response && response.data) {
         updateLogicalClock(this.clock, response.data.clock);
@@ -161,11 +180,10 @@ class BBSClient {
   async listChannels() {
     try {
       const message = createMessage('channels', {}, this.clock);
-      this.reqSocket.send(message);
+      await this.reqSocket.send(message);
       
-      const response = await new Promise((resolve) => {
-        this.reqSocket.once('message', (msg) => resolve(parseMessage(msg)));
-      });
+      const [rawResponse] = await this.reqSocket.receive();
+      const response = parseMessage(rawResponse);
       
       if (response && response.data) {
         updateLogicalClock(this.clock, response.data.clock);
@@ -214,11 +232,10 @@ class BBSClient {
       };
       const message = createMessage('publish', data, this.clock);
       
-      this.reqSocket.send(message);
+      await this.reqSocket.send(message);
       
-      const response = await new Promise((resolve) => {
-        this.reqSocket.once('message', (msg) => resolve(parseMessage(msg)));
-      });
+      const [rawResponse] = await this.reqSocket.receive();
+      const response = parseMessage(rawResponse);
       
       if (response && response.data) {
         updateLogicalClock(this.clock, response.data.clock);
@@ -251,11 +268,10 @@ class BBSClient {
       };
       const message = createMessage('message', data, this.clock);
       
-      this.reqSocket.send(message);
+      await this.reqSocket.send(message);
       
-      const response = await new Promise((resolve) => {
-        this.reqSocket.once('message', (msg) => resolve(parseMessage(msg)));
-      });
+      const [rawResponse] = await this.reqSocket.receive();
+      const response = parseMessage(rawResponse);
       
       if (response && response.data) {
         updateLogicalClock(this.clock, response.data.clock);
@@ -317,11 +333,10 @@ class BBSClient {
       const data = { channel: channelName, limit: limit };
       const message = createMessage('get_history', data, this.clock);
       
-      this.reqSocket.send(message);
+      await this.reqSocket.send(message);
       
-      const response = await new Promise((resolve) => {
-        this.reqSocket.once('message', (msg) => resolve(parseMessage(msg)));
-      });
+      const [rawResponse] = await this.reqSocket.receive();
+      const response = parseMessage(rawResponse);
       
       if (response && response.data) {
         updateLogicalClock(this.clock, response.data.clock);

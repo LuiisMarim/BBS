@@ -23,16 +23,16 @@ async function main() {
   
   try {
     // Socket XSUB para receber publicações dos servidores (backend)
-    const xsub = zmq.socket('xsub');
+    const xsub = new zmq.XSubscriber();
     
     // Socket XPUB para enviar publicações aos clientes/bots (frontend)
-    const xpub = zmq.socket('xpub');
+    const xpub = new zmq.XPublisher();
     
     // Bind nos sockets
-    xsub.bindSync(XSUB_PORT);
+    await xsub.bind(XSUB_PORT);
     console.log(`[PROXY] XSUB (backend) escutando em ${XSUB_PORT}`);
     
-    xpub.bindSync(XPUB_PORT);
+    await xpub.bind(XPUB_PORT);
     console.log(`[PROXY] XPUB (frontend) escutando em ${XPUB_PORT}`);
     
     console.log('[PROXY] Proxy pronto para rotear publicações');
@@ -42,43 +42,40 @@ async function main() {
     // Contador de mensagens
     let messageCount = 0;
     
-    // Recebe mensagens do XSUB (publicações dos servidores)
-    xsub.on('message', function(topic, ...parts) {
-      // Incrementa relógio lógico ao processar mensagem
-      clock.increment();
-      messageCount++;
-      
-      // Log periódico
-      if (messageCount % 100 === 0) {
-        console.log(`[PROXY] ${messageCount} mensagens roteadas (clock: ${clock.getTime()})`);
+    // Encaminha mensagens entre XSUB e XPUB de forma assíncrona
+    const forwardFromXSubToXPub = async () => {
+      for await (const [msg] of xsub) {
+        clock.increment();
+        messageCount++;
+        
+        if (messageCount % 100 === 0) {
+          console.log(`[PROXY] ${messageCount} mensagens roteadas (clock: ${clock.getTime()})`);
+        }
+        
+        await xpub.send(msg);
       }
-      
-      // Encaminha para XPUB (para os assinantes)
-      if (parts.length > 0) {
-        xpub.send([topic, ...parts]);
-      } else {
-        xpub.send(topic);
-      }
-    });
+    };
     
-    // Recebe assinaturas do XPUB (clientes/bots se inscrevendo)
-    xpub.on('message', function(subscription) {
-      // Encaminha assinatura para XSUB
-      xsub.send(subscription);
-      
-      // Log de assinaturas (byte 0 = 1 indica subscribe, 0 indica unsubscribe)
-      const isSubscribe = subscription[0] === 1;
-      const topic = subscription.slice(1).toString();
-      
-      if (isSubscribe) {
-        console.log(`[PROXY] Nova assinatura no tópico: ${topic || '(todos)'}`);
-      } else {
-        console.log(`[PROXY] Cancelamento de assinatura no tópico: ${topic || '(todos)'}`);
+    // Encaminha assinaturas de XPUB para XSUB
+    const forwardFromXPubToXSub = async () => {
+      for await (const [msg] of xpub) {
+        // Log de assinaturas (byte 0 = 1 indica subscribe, 0 indica unsubscribe)
+        const isSubscribe = msg[0] === 1;
+        const topic = msg.slice(1).toString();
+        
+        if (isSubscribe) {
+          console.log(`[PROXY] Nova assinatura no tópico: ${topic || '(todos)'}`);
+        } else {
+          console.log(`[PROXY] Cancelamento de assinatura no tópico: ${topic || '(todos)'}`);
+        }
+        
+        await xsub.send(msg);
       }
-    });
+    };
     
-    // Mantém o processo rodando
+    // Executa ambos os forwards em paralelo
     console.log('[PROXY] Pressione Ctrl+C para encerrar');
+    await Promise.all([forwardFromXSubToXPub(), forwardFromXPubToXSub()]);
     
   } catch (error) {
     console.error('[PROXY] Erro ao iniciar proxy:', error);

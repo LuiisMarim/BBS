@@ -11,15 +11,25 @@ RUN apk add --no-cache \
     make \
     g++
 
-# Copia código comum
-COPY javascript/common_utils/ ./common_utils/
-
-# Copia código do proxy
-COPY javascript/proxy/ ./proxy/
+# Copia package.json do proxy primeiro
+COPY javascript/proxy/package.json ./proxy/
 
 # Instala dependências Node.js
 WORKDIR /app/proxy
 RUN npm install
+
+# Cria link simbólico para node_modules na raiz
+RUN ln -s /app/proxy/node_modules /app/node_modules
+
+# Volta para raiz e copia código comum
+WORKDIR /app
+COPY javascript/common_utils/ ./common_utils/
+
+# Copia código do proxy (sem sobrescrever package.json e node_modules)
+COPY javascript/proxy/*.js ./proxy/
+
+# Define workdir final
+WORKDIR /app/proxy
 
 # Expõe portas
 EXPOSE 5557 5558

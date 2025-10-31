@@ -15,6 +15,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "zeromq": "^5.2.8"
+    "zeromq": "^6.0.0-beta.20",
+    "msgpack-lite": "^0.1.26"
   }
 }
