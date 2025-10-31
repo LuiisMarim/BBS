@@ -420,10 +420,6 @@ Todas as mensagens são serializadas usando **MessagePack**, um formato binário
   }
 }
 ```
-
-> **📌 Nota de Conformidade:**  
-> A diferença entre `"sucesso"` (Parte 1) e `"OK"` (Parte 2) segue literalmente as especificações dos arquivos `parte1.md` e `parte2.md`. O campo de erro foi padronizado como `"description"` conforme especificação da Parte 1.
-
 ---
 
 ## ⏰ Relógios Lógicos e Sincronização
