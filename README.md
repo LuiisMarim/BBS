@@ -221,6 +221,7 @@ gcc/make
 ## 💾 Persistência Local
 
 Todos os dados são **persistidos localmente em arquivos JSON**, sem uso de bancos de dados externos.
+A persistência real acontece nos volumes Docker, não no diretório do host. 
 
 ### Estrutura de Dados
 
