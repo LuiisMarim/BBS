@@ -223,6 +223,11 @@ gcc/make
 Todos os dados são **persistidos localmente em arquivos JSON**, sem uso de bancos de dados externos.
 A persistência real acontece nos volumes Docker, não no diretório do host. 
 
+Ver todos os arquivos persistidos em um servidor:
+```
+docker exec bbs_server_1 ls -lah /data/
+```
+
 ### Estrutura de Dados
 
 ```
