@@ -1672,30 +1672,5 @@ Desenvolvido como projeto da disciplina de **Sistemas Distribuídos**.
 
 ---
 
-## 📝 Notas Finais
-
-Este projeto implementa conceitos fundamentais de sistemas distribuídos de forma prática e funcional. Embora seja uma implementação educacional, demonstra:
-
-✅ Comunicação assíncrona eficiente
-✅ Balanceamento de carga automático
-✅ Sincronização de relógios distribuídos
-✅ Replicação de dados com consistência
-✅ Persistência local robusta
-✅ Integração multi-linguagem
-✅ Containerização e orquestração
-
-**Possíveis Melhorias Futuras:**
-- Implementação completa do algoritmo de Berkeley
-- Eleição de coordenador mais robusta (Bully Algorithm)
-- Criptografia de mensagens
-- Autenticação de usuários
-- Interface web para o cliente
-- Métricas e monitoramento (Prometheus/Grafana)
-- Testes automatizados (unit + integration)
-- CI/CD pipeline
-
----
-
 **🎉 Obrigado por usar o Sistema BBS!**
 
-Para dúvidas ou contribuições, abra uma issue no repositório.
