@@ -221,6 +221,12 @@ gcc/make
 ## 💾 Persistência Local
 
 Todos os dados são **persistidos localmente em arquivos JSON**, sem uso de bancos de dados externos.
+A persistência real acontece nos volumes Docker, não no diretório do host. 
+
+Ver todos os arquivos persistidos em um servidor:
+```
+docker exec bbs_server_1 ls -lah /data/
+```
 
 ### Estrutura de Dados
 
@@ -414,10 +420,6 @@ Todas as mensagens são serializadas usando **MessagePack**, um formato binário
   }
 }
 ```
-
-> **📌 Nota de Conformidade:**  
-> A diferença entre `"sucesso"` (Parte 1) e `"OK"` (Parte 2) segue literalmente as especificações dos arquivos `parte1.md` e `parte2.md`. O campo de erro foi padronizado como `"description"` conforme especificação da Parte 1.
-
 ---
 
 ## ⏰ Relógios Lógicos e Sincronização
@@ -1670,30 +1672,5 @@ Desenvolvido como projeto da disciplina de **Sistemas Distribuídos**.
 
 ---
 
-## 📝 Notas Finais
-
-Este projeto implementa conceitos fundamentais de sistemas distribuídos de forma prática e funcional. Embora seja uma implementação educacional, demonstra:
-
-✅ Comunicação assíncrona eficiente
-✅ Balanceamento de carga automático
-✅ Sincronização de relógios distribuídos
-✅ Replicação de dados com consistência
-✅ Persistência local robusta
-✅ Integração multi-linguagem
-✅ Containerização e orquestração
-
-**Possíveis Melhorias Futuras:**
-- Implementação completa do algoritmo de Berkeley
-- Eleição de coordenador mais robusta (Bully Algorithm)
-- Criptografia de mensagens
-- Autenticação de usuários
-- Interface web para o cliente
-- Métricas e monitoramento (Prometheus/Grafana)
-- Testes automatizados (unit + integration)
-- CI/CD pipeline
-
----
-
 **🎉 Obrigado por usar o Sistema BBS!**
 
-Para dúvidas ou contribuições, abra uma issue no repositório.
