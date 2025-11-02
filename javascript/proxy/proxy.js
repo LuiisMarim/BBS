@@ -44,7 +44,7 @@ async function main() {
     
     // Encaminha mensagens entre XSUB e XPUB de forma assíncrona
     const forwardFromXSubToXPub = async () => {
-      for await (const [msg] of xsub) {
+      for await (const msg of xsub) {
         clock.increment();
         messageCount++;
         

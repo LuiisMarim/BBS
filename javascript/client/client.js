@@ -346,7 +346,13 @@ class BBSClient {
           console.log(`\n=== Histórico de #${channelName} (${messages.length} mensagens) ===`);
           
           messages.forEach((msg, idx) => {
-            const timestamp = new Date(msg.timestamp * 1000).toLocaleTimeString();
+            const date = new Date(msg.timestamp * 1000);
+            const timestamp = date.toLocaleTimeString('pt-BR', { 
+              timeZone: 'America/Sao_Paulo',
+              hour: '2-digit', 
+              minute: '2-digit', 
+              second: '2-digit' 
+            });
             console.log(`  [${timestamp}] ${msg.user}: ${msg.message}`);
           });
           

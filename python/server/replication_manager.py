@@ -114,13 +114,13 @@ class ReplicationManager:
         print(f"[REPLICATION:{self.server_name}] Recebendo replicação de {source_server} (tipo: {data_type})")
         
         try:
-            # Salva dados replicados
+            # Mescla dados replicados com dados locais
             if data_type == 'logins':
-                self.datastore.save('logins.json', payload)
+                self._merge_logins(payload)
             elif data_type == 'channels':
-                self.datastore.save('channels.json', payload)
+                self._merge_channels(payload)
             elif data_type == 'messages':
-                self.datastore.save('messages.json', payload)
+                self._merge_messages(payload)
             else:
                 return {
                     'service': 'replicate',
@@ -204,6 +204,110 @@ class ReplicationManager:
                 'service': 'sync_state',
                 'data': {'status': 'error', 'message': str(e)}
             }
+    
+    def _merge_logins(self, new_logins: List[Dict]):
+        """
+        Mescla logins replicados com logins locais
+        Remove duplicatas baseado no campo 'user'
+        """
+        try:
+            # Carrega logins existentes
+            existing = self.datastore.load('logins.json', default=[])
+            
+            # Cria conjunto de usuários já existentes
+            existing_users = {login['user'] for login in existing if 'user' in login}
+            
+            # Adiciona apenas novos usuários
+            for login in new_logins:
+                if 'user' in login and login['user'] not in existing_users:
+                    existing.append(login)
+                    existing_users.add(login['user'])
+            
+            # Salva resultado mesclado
+            self.datastore.save('logins.json', existing)
+            print(f"[REPLICATION:{self.server_name}] Logins mesclados: {len(existing)} total")
+            
+        except Exception as e:
+            print(f"[REPLICATION:{self.server_name}] Erro ao mesclar logins: {e}")
+    
+    def _merge_channels(self, new_channels: List[Dict]):
+        """
+        Mescla canais replicados com canais locais
+        Remove duplicatas baseado no campo 'channel'
+        """
+        try:
+            # Carrega canais existentes
+            existing = self.datastore.load('channels.json', default=[])
+            
+            # Cria conjunto de canais já existentes
+            existing_channels = {ch['channel'] for ch in existing if 'channel' in ch}
+            
+            # Adiciona apenas novos canais
+            for channel in new_channels:
+                if 'channel' in channel and channel['channel'] not in existing_channels:
+                    existing.append(channel)
+                    existing_channels.add(channel['channel'])
+            
+            # Salva resultado mesclado
+            self.datastore.save('channels.json', existing)
+            print(f"[REPLICATION:{self.server_name}] Canais mesclados: {len(existing)} total")
+            
+        except Exception as e:
+            print(f"[REPLICATION:{self.server_name}] Erro ao mesclar canais: {e}")
+    
+    def _merge_messages(self, new_messages: List[Dict]):
+        """
+        Mescla mensagens replicadas com mensagens locais
+        Remove duplicatas baseado em (timestamp, clock, user, channel/dst)
+        Mantém ordem por timestamp e clock
+        """
+        try:
+            # Carrega mensagens existentes
+            existing = self.datastore.load('messages.json', default=[])
+            
+            # Cria conjunto de identificadores únicos das mensagens existentes
+            existing_ids = set()
+            for msg in existing:
+                msg_id = self._get_message_id(msg)
+                existing_ids.add(msg_id)
+            
+            # Adiciona apenas mensagens novas
+            added = 0
+            for msg in new_messages:
+                msg_id = self._get_message_id(msg)
+                if msg_id not in existing_ids:
+                    existing.append(msg)
+                    existing_ids.add(msg_id)
+                    added += 1
+            
+            # Ordena por timestamp e clock para manter consistência
+            existing.sort(key=lambda m: (m.get('timestamp', 0), m.get('clock', 0)))
+            
+            # Salva resultado mesclado
+            self.datastore.save('messages.json', existing)
+            print(f"[REPLICATION:{self.server_name}] Mensagens mescladas: {added} novas, {len(existing)} total")
+            
+        except Exception as e:
+            print(f"[REPLICATION:{self.server_name}] Erro ao mesclar mensagens: {e}")
+    
+    def _get_message_id(self, msg: Dict) -> tuple:
+        """
+        Gera identificador único para uma mensagem
+        Baseado em: timestamp, clock, tipo, usuário e canal/destinatário
+        """
+        msg_type = msg.get('type', '')
+        timestamp = msg.get('timestamp', 0)
+        clock = msg.get('clock', 0)
+        user = msg.get('user', msg.get('src', ''))
+        
+        if msg_type == 'publish':
+            target = msg.get('channel', '')
+        else:  # message (privada)
+            target = msg.get('dst', '')
+        
+        message_text = msg.get('message', '')
+        
+        return (timestamp, clock, msg_type, user, target, message_text)
     
     def update_server_list(self, servers: List[Dict]):
         """

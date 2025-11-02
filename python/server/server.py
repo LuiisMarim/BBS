@@ -113,6 +113,28 @@ class MessageServer:
         print(f"[SERVER:{self.server_name}] Estado carregado: {len(self.users)} usuários, "
               f"{len(self.channels)} canais, {len(self.messages)} mensagens")
     
+    def _reload_users_and_channels(self):
+        """Recarrega usuários e canais do disco (após replicação)"""
+        try:
+            # Recarrega logins
+            logins_data = self.datastore.load('logins.json', default=[])
+            with self.users_lock:
+                self.users = set([entry['user'] for entry in logins_data if 'user' in entry])
+            
+            # Recarrega canais
+            channels_data = self.datastore.load('channels.json', default=[])
+            with self.channels_lock:
+                self.channels = set([entry['channel'] for entry in channels_data if 'channel' in entry])
+            
+            # Recarrega mensagens
+            with self.messages_lock:
+                self.messages = self.datastore.load('messages.json', default=[])
+            
+            print(f"[SERVER:{self.server_name}] Estado recarregado: {len(self.users)} usuários, "
+                  f"{len(self.channels)} canais, {len(self.messages)} mensagens")
+        except Exception as e:
+            print(f"[SERVER:{self.server_name}] Erro ao recarregar estado: {e}")
+    
     def _save_state(self):
         """Salva estado atual"""
         # Salva usuários
@@ -190,6 +212,10 @@ class MessageServer:
         # Thread para monitorar coordenador
         monitor_thread = Thread(target=self._monitor_coordinator, daemon=True)
         monitor_thread.start()
+        
+        # Thread para recarregar estado periodicamente (após replicações)
+        reload_thread = Thread(target=self._periodic_state_reload, daemon=True)
+        reload_thread.start()
     
     def send_heartbeat(self):
         """Thread que envia heartbeat periodicamente ao servidor de referência"""
@@ -294,6 +320,12 @@ class MessageServer:
                     # Aguarda resultado da eleição
                     time.sleep(10)
     
+    def _periodic_state_reload(self):
+        """Thread que recarrega estado periodicamente para sincronizar com replicações"""
+        while True:
+            time.sleep(5)  # Recarrega a cada 5 segundos
+            self._reload_users_and_channels()
+    
     def _check_sync(self):
         """Verifica se é hora de sincronizar (Berkeley e replicação)"""
         if self.message_count % SYNC_INTERVAL == 0:
@@ -387,6 +419,11 @@ class MessageServer:
                 'clock': self.clock.get_time()
             }
             self.datastore.append('logins.json', login_entry)
+            
+            if self.replication_manager:
+                Thread(target=lambda: self.replication_manager.replicate_to_all(
+                    'logins', [login_entry]
+                ), daemon=True).start()
         
         print(f"[SERVER:{self.server_name}] Novo login: {user}")
         return create_response('login', 'sucesso', {}, self.clock)
@@ -420,6 +457,11 @@ class MessageServer:
                 'clock': self.clock.get_time()
             }
             self.datastore.append('channels.json', channel_entry)
+            
+            if self.replication_manager:
+                Thread(target=lambda: self.replication_manager.replicate_to_all(
+                    'channels', [channel_entry]
+                ), daemon=True).start()
         
         print(f"[SERVER:{self.server_name}] Novo canal: {channel}")
         return create_response('channel', 'sucesso', {}, self.clock)
@@ -469,6 +511,11 @@ class MessageServer:
             self.messages.append(message_entry)
             self.datastore.save('messages.json', self.messages)
         
+        if self.replication_manager:
+            Thread(target=lambda: self.replication_manager.replicate_to_all(
+                'messages', [message_entry]
+            ), daemon=True).start()
+        
         self.message_count += 1
         self._check_sync()
         
@@ -513,6 +560,12 @@ class MessageServer:
             self.messages.append(message_entry)
             self.datastore.save('messages.json', self.messages)
         
+        # Replica imediatamente mensagens para garantir consistência
+        if self.replication_manager:
+            Thread(target=lambda: self.replication_manager.replicate_to_all(
+                'messages', [message_entry]
+            ), daemon=True).start()
+        
         self.message_count += 1
         self._check_sync()
         
@@ -548,6 +601,10 @@ class MessageServer:
                 if msg.get('type') == 'publish' and msg.get('channel') == channel
             ]
             
+            # Ordena por timestamp (e relógio lógico como desempate) para garantir
+            # que o histórico retornado esteja em ordem cronológica.
+            channel_messages.sort(key=lambda m: (m.get('timestamp', 0), m.get('clock', 0)))
+
             # Limita quantidade (últimas N mensagens)
             if len(channel_messages) > limit:
                 channel_messages = channel_messages[-limit:]
