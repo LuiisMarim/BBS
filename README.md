@@ -191,15 +191,44 @@ gcc/make
 **Comandos Disponíveis:**
 ```
 /help                    - Mostra ajuda
-/users                   - Lista usuários
-/channels                - Lista canais
-/create <canal>          - Cria canal
-/join <canal>            - Inscreve-se em canal
-/leave <canal>           - Cancela inscrição
-/msg <usuário> <texto>   - Mensagem privada
-/pub <canal> <texto>     - Publica em canal
+/users                   - Lista usuários cadastrados
+/channels                - Lista canais disponíveis
+/create <canal>          - Cria novo canal
+/join <canal>            - Inscreve-se em canal (recebe publicações)
+/leave <canal>           - Cancela inscrição em canal
+/msg <usuário> <texto>   - Envia mensagem privada
+/pub <canal> <texto>     - Publica mensagem em canal
+/history <canal> [n]     - Histórico de mensagens (últimas n, padrão 50)
 /quit                    - Sai do cliente
 ```
+
+**Exemplos de Uso:**
+```bash
+# Login
+alice
+
+# Listar usuários
+/users
+
+# Criar e entrar em canal
+/create meucanal
+/join meucanal
+
+# Publicar em canal
+/pub meucanal Olá pessoal!
+
+# Enviar mensagem privada
+/msg bob Oi Bob, tudo bem?
+
+# Ver histórico
+/history geral 20
+```
+
+**⚠️ Importante sobre Mensagens Privadas:**
+- O cliente se inscreve automaticamente no tópico com seu nome de usuário ao fazer login
+- Isso permite receber mensagens privadas automaticamente
+- Mensagens privadas são enviadas via REQ-REP e recebidas via PUB-SUB
+- Formato: `[@remetente → você]: mensagem`
 
 ### 6. Bot (Python)
 
@@ -221,12 +250,6 @@ gcc/make
 ## 💾 Persistência Local
 
 Todos os dados são **persistidos localmente em arquivos JSON**, sem uso de bancos de dados externos.
-A persistência real acontece nos volumes Docker, não no diretório do host. 
-
-Ver todos os arquivos persistidos em um servidor:
-```
-docker exec bbs_server_1 ls -lah /data/
-```
 
 ### Estrutura de Dados
 
@@ -420,6 +443,10 @@ Todas as mensagens são serializadas usando **MessagePack**, um formato binário
   }
 }
 ```
+
+> **📌 Nota de Conformidade:**  
+> A diferença entre `"sucesso"` (Parte 1) e `"OK"` (Parte 2) segue literalmente as especificações dos arquivos `parte1.md` e `parte2.md`. O campo de erro foi padronizado como `"description"` conforme especificação da Parte 1.
+
 ---
 
 ## ⏰ Relógios Lógicos e Sincronização
@@ -1176,16 +1203,185 @@ Aguarde alguns segundos e observe mensagens dos bots:
 
 ### Teste 5: Mensagem Privada
 
-1. No cliente 1: Login como `alice`
-2. Abra outro terminal
-3. No terminal 2: `docker exec -it bbs_client node client.js`
-4. Login como `bob`
-5. No cliente de alice: `/msg bob Oi Bob, tudo bem?`
-6. No cliente de bob, você verá:
+#### Método 1: Usando Dois Clientes (Recomendado)
 
+1. **Terminal 1** - Cliente Alice:
+```bash
+docker attach bbs_client
+# Digite: alice (quando solicitar nome de usuário)
+# O cliente se inscreverá automaticamente no tópico 'alice' para receber mensagens privadas
 ```
-[@alice → você]: Oi Bob, tudo bem?
+
+2. **Terminal 2** - Cliente Bob:
+```bash
+docker exec -it bbs_client node /app/client/client.js
+# Digite: bob (quando solicitar nome de usuário)
+# O cliente se inscreverá automaticamente no tópico 'bob' para receber mensagens privadas
 ```
+
+3. **No cliente Alice** (Terminal 1), envie mensagem privada:
+```
+/msg bob Oi Bob, tudo bem? Esta é uma mensagem privada!
+```
+
+**Resultado esperado no cliente Alice:**
+```
+[CLIENT] Mensagem enviada para @bob
+```
+
+4. **No cliente Bob** (Terminal 2), você verá em tempo real:
+```
+[@alice → você]: Oi Bob, tudo bem? Esta é uma mensagem privada!
+```
+
+#### Método 2: Usando Scripts Python (Para Testes Automatizados)
+
+**Criar script do receptor (Bob):**
+```bash
+cat > /tmp/test_receiver.py << 'EOF'
+#!/usr/bin/env python3
+import zmq, sys, time
+sys.path.insert(0, '/app/common_utils')
+from logical_clock import LogicalClock
+from messaging import create_message, parse_message, update_logical_clock
+
+context = zmq.Context()
+clock = LogicalClock()
+req = context.socket(zmq.REQ)
+sub = context.socket(zmq.SUB)
+req.connect("tcp://broker:5555")
+sub.connect("tcp://proxy:5558")
+
+# Login
+msg = create_message('login', {'user': 'bob_test'}, clock)
+req.send(msg)
+response = parse_message(req.recv())
+update_logical_clock(clock, response['data']['clock'])
+print(f"[BOB] Login: {response['data']['status']}")
+
+# Inscrever no próprio tópico
+sub.setsockopt_string(zmq.SUBSCRIBE, 'bob_test')
+print("[BOB] Aguardando mensagens privadas...")
+
+# Aguardar mensagens
+poller = zmq.Poller()
+poller.register(sub, zmq.POLLIN)
+while True:
+    socks = dict(poller.poll(30000))
+    if sub in socks:
+        topic = sub.recv_string()
+        msg_data = parse_message(sub.recv())
+        update_logical_clock(clock, msg_data['data']['clock'])
+        print(f"\n📨 MENSAGEM PRIVADA RECEBIDA!")
+        print(f"De: @{msg_data['data']['src']}")
+        print(f"Mensagem: {msg_data['data']['message']}")
+        print(f"Clock: {clock.get_time()}\n")
+    else:
+        break
+EOF
+
+# Copiar para o container e executar
+docker cp /tmp/test_receiver.py bbs_server_1:/app/
+docker exec -d bbs_server_1 python /app/test_receiver.py
+```
+
+**Criar script do emissor (Alice):**
+```bash
+cat > /tmp/test_sender.py << 'EOF'
+#!/usr/bin/env python3
+import zmq, sys
+sys.path.insert(0, '/app/common_utils')
+from logical_clock import LogicalClock
+from messaging import create_message, parse_message, update_logical_clock
+
+context = zmq.Context()
+clock = LogicalClock()
+req = context.socket(zmq.REQ)
+req.connect("tcp://broker:5555")
+
+# Login
+msg = create_message('login', {'user': 'alice_test'}, clock)
+req.send(msg)
+response = parse_message(req.recv())
+update_logical_clock(clock, response['data']['clock'])
+print(f"[ALICE] Login: {response['data']['status']}")
+
+# Enviar mensagem privada
+msg = create_message('message', {
+    'src': 'alice_test',
+    'dst': 'bob_test',
+    'message': '🎉 Olá Bob! Esta é uma mensagem privada de teste!'
+}, clock)
+req.send(msg)
+response = parse_message(req.recv())
+update_logical_clock(clock, response['data']['clock'])
+print(f"[ALICE] Status: {response['data']['status']}")
+print(f"[ALICE] ✅ Mensagem enviada! Clock: {clock.get_time()}")
+EOF
+
+# Executar após aguardar Bob estar pronto
+sleep 3
+docker cp /tmp/test_sender.py bbs_server_2:/app/
+docker exec bbs_server_2 python /app/test_sender.py
+```
+
+**Verificar mensagens persistidas:**
+```bash
+docker exec bbs_server_1 python3 -c "
+import json
+msgs = json.load(open('/data/messages.json'))
+private_msgs = [m for m in msgs if m.get('type') == 'message']
+print(f'Total de mensagens privadas: {len(private_msgs)}')
+for m in private_msgs[-3:]:
+    print(f\"De: {m['src']} → Para: {m['dst']}\")
+    print(f\"  Mensagem: {m['message']}\")
+    print(f\"  Clock: {m['clock']}\")
+"
+```
+
+**Resultado esperado:**
+```
+Total de mensagens privadas: 1
+De: alice_test → Para: bob_test
+  Mensagem: 🎉 Olá Bob! Esta é uma mensagem privada de teste!
+  Clock: 1684
+```
+
+#### Como Funciona a Mensagem Privada
+
+1. **Alice envia** mensagem para Bob via serviço `message`:
+   ```json
+   {
+     "service": "message",
+     "data": {
+       "src": "alice",
+       "dst": "bob",
+       "message": "Oi Bob!",
+       "clock": 42
+     }
+   }
+   ```
+
+2. **Servidor recebe** via Broker (REQ-REP) e valida se usuário destino existe
+
+3. **Servidor publica** no tópico `bob` via Proxy (PUB-SUB):
+   ```json
+   {
+     "service": "message",
+     "data": {
+       "src": "alice",
+       "dst": "bob",
+       "message": "Oi Bob!",
+       "clock": 43
+     }
+   }
+   ```
+
+4. **Bob recebe** porque está inscrito no tópico com seu próprio nome
+
+5. **Persistência**: Mensagem é salva em `/data/messages.json` com `type: "message"`
+
+6. **Replicação**: Todos os 3 servidores sincronizam a mensagem privada
 
 ### Teste 6: Verificar Persistência
 
@@ -1672,5 +1868,30 @@ Desenvolvido como projeto da disciplina de **Sistemas Distribuídos**.
 
 ---
 
+## 📝 Notas Finais
+
+Este projeto implementa conceitos fundamentais de sistemas distribuídos de forma prática e funcional. Embora seja uma implementação educacional, demonstra:
+
+✅ Comunicação assíncrona eficiente
+✅ Balanceamento de carga automático
+✅ Sincronização de relógios distribuídos
+✅ Replicação de dados com consistência
+✅ Persistência local robusta
+✅ Integração multi-linguagem
+✅ Containerização e orquestração
+
+**Possíveis Melhorias Futuras:**
+- Implementação completa do algoritmo de Berkeley
+- Eleição de coordenador mais robusta (Bully Algorithm)
+- Criptografia de mensagens
+- Autenticação de usuários
+- Interface web para o cliente
+- Métricas e monitoramento (Prometheus/Grafana)
+- Testes automatizados (unit + integration)
+- CI/CD pipeline
+
+---
+
 **🎉 Obrigado por usar o Sistema BBS!**
 
+Para dúvidas ou contribuições, abra uma issue no repositório.
